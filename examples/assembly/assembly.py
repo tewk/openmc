@@ -15,6 +15,7 @@ from math import log10
 
 import numpy as np
 import openmc
+import to_cubit_journal
 
 # Define surfaces
 fuel_or = openmc.ZCylinder(r=0.39218, name='Fuel OR')
@@ -136,6 +137,7 @@ if __name__ == '__main__':
 
     if args.generate or args.run:
         model = assembly_model()
+        to_cubit_journal.to_cubit_journal( model.geometry, world=[50,50,50] )
         if args.generate:
             model.export_to_xml()
         if args.run:

@@ -1,4 +1,5 @@
 import openmc
+import to_cubit_journal
 
 ###############################################################################
 #                      Simulation Input File Parameters
@@ -100,6 +101,7 @@ cell1.fill = lattice
 # Instantiate a Geometry, register the root Universe, and export to XML
 geometry = openmc.Geometry(root)
 geometry.export_to_xml()
+to_cubit_journal.to_cubit_journal( geometry, world=[10,10,10], filename="geom.jou" )
 
 
 ###############################################################################

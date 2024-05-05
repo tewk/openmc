@@ -2,6 +2,7 @@ from math import log10
 
 import numpy as np
 import openmc
+import to_cubit_journal
 
 ###############################################################################
 # Create materials for the problem
@@ -54,7 +55,7 @@ water = openmc.Cell(fill=borated_water, region=+clad_or & -box)
 # Create a geometry and export to XML
 geometry = openmc.Geometry([fuel, gap, clad, water])
 geometry.export_to_xml()
-
+to_cubit_journal.to_cubit_journal( geometry, world=[30,30,30] )
 ###############################################################################
 # Define problem settings
 
