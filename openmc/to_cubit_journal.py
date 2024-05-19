@@ -11,6 +11,20 @@ def flatten(S):
         return flatten(S[0]) + flatten(S[1:])
     return S[:1] + flatten(S[1:])
 
+def vector_to_euler_xyz(v):
+    x, y, z = v
+    phi = math.atan2(z, x)
+    theta = math.acos(x / math.sqrt(x**2 + y**2))
+    psi = math.atan2(y * math.cos(theta), x)
+
+    # Ensure angles are within [0, 2*pi] range
+    phi %= (2 * math.pi)
+    theta %= (2 * math.pi)
+    psi %= (2 * math.pi)
+
+    oe = 180 / math.pi 
+    return phi * oe, theta * oe, psi * oe
+
 def to_cubit_journal(geom, seen=set(), world=[60,60,60], filename=None, to_cubit=False ):
     w = world
     cid = 1
@@ -20,6 +34,21 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], filename=None, to_cubit
         cid = cid + 1
         return id
     cmds = []
+
+
+    def rotate( id, x, y, z ):
+        if nonzero( x, y, z ):
+            phi, theta, psi = vector_to_euler_xyz( ( x, y, z ) )
+            cmds.append( f"body {id} rotate {phi} about Z" )
+            cmds.append( f"body {id} rotate {theta} about Y" )
+            cmds.append( f"body {id} rotate {psi} about X" )
+
+    def nonzero(*args):
+        return any(arg!= 0 for arg in args)
+
+    def move( id, x, y, z ):
+        if nonzero( x, y, z ):
+           cmds.append( f"body {id} move {x} {y} {z}" )
 
     def make_world_brick():
         pass
@@ -42,8 +71,14 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], filename=None, to_cubit
                         return ""
 
                 if surface._type == "plane":
-                    raise "plane not implemented"
-                    pass
+                    cmds.append( f"brick x {w[0]} y {w[1]} z {w[2]}" )
+                    id = lastid()
+                    phi, theta, psi = vector_to_euler_xyz( ( surface.coefficients['a'], surface.coefficients['b'], surface.coefficients['c'] ) )
+                    cmds.append( f"body {id} rotate {phi} about Z" )
+                    cmds.append( f"body {id} rotate {theta} about Y" )
+                    cmds.append( f"body {id} rotate {psi} about X" )
+                    cmds.append( f"body {id} move direction {surface.coefficients['a'] } { surface.coefficients['b']} {surface.coefficients['c']} distance {surface.coefficients['d']}" )
+                    return id
                 elif surface._type == "x-plane":
                     cmds.append( f"brick x {w[0]} y {w[1]} z {w[2]}" )
                     id = lastid()
@@ -60,7 +95,26 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], filename=None, to_cubit
                     cmds.append( f"section volume {id} with zplane offset {surface.coefficients['z0']} {reverse()}")
                     return id
                 elif surface._type == "cylinder":
-                    raise "cylinder not implemented"
+                    h = inner_world[2] if inner_world else w[2] 
+                    cmds.append( f"cylinder height {h} radius {surface.coefficients['r']}")
+                    id = lastid()
+                    if node.side != '-':
+                        wid = lastid()
+                        if inner_world:
+                            if hex:
+                                cmds.append( f"create prism height {inner_world[2]} sides 6 radius { ( inner_world[0] / 2 ) }" )
+                                cmds.append( f"rotate vol {wid} about z angle 30" )
+                            else:
+                                cmds.append( f"brick x {inner_world[0]} y {inner_world[1]} z {inner_world[2]}" )
+                        else:
+                            cmds.append( f"brick x {w[0]} y {w[1]} z {w[2]}" )
+                        cmds.append( f"subtract vol {id} from vol {wid}" )
+                        rotate( wid, surface.coefficients['dx'], surface.coefficients['dy'], surface.coefficients['dz'] )
+                        move( wid, surface.coefficients['x0'], surface.coefficients['y0'], surface.coefficients['z0'] )
+                        return wid
+                    rotate( id, surface.coefficients['dx'], surface.coefficients['dy'], surface.coefficients['dz'] )
+                    move( id, surface.coefficients['x0'], surface.coefficients['y0'], surface.coefficients['z0'] )
+                    return id
                 elif surface._type == "x-cylinder":
                     h = inner_world[0] if inner_world else w[0] 
                     cmds.append( f"cylinder height {h} radius {surface.coefficients['r']}")
@@ -78,7 +132,9 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], filename=None, to_cubit
                         else:
                             cmds.append( f"brick x {w[0]} y {w[1]} z {w[2]}" )
                         cmds.append( f"subtract vol {id} from vol {wid}" )
+                        move( wid, 0, surface.coefficients['y0'], surface.coefficients['z0'] )
                         return wid
+                    move( id, 0, surface.coefficients['y0'], surface.coefficients['z0'] )
                     return id
                 elif surface._type == "y-cylinder":
                     h = inner_world[1] if inner_world else w[1] 
@@ -97,7 +153,9 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], filename=None, to_cubit
                         else:
                             cmds.append( f"brick x {w[0]} y {w[1]} z {w[2]}" )
                         cmds.append( f"subtract vol {id} from vol {wid}" )
+                        move( wid, surface.coefficients['x0'], 0, surface.coefficients['z0'] )
                         return wid
+                    move( id, surface.coefficients['x0'], 0, surface.coefficients['z0'] )
                     return id
                 elif surface._type == "z-cylinder":
                     h = inner_world[2] if inner_world else w[2] 
@@ -114,7 +172,9 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], filename=None, to_cubit
                         else:
                             cmds.append( f"brick x {w[0]} y {w[1]} z {w[2]}" )
                         cmds.append( f"subtract vol {id} from vol {wid}" )
+                        move( wid, surface.coefficients['x0'], surface.coefficients['y0'], 0 )
                         return wid
+                    move( id, surface.coefficients['x0'], surface.coefficients['y0'], 0 )
                     return id
                 elif surface._type == "sphere":
                     print( ind(), f"surface radius {surface._radius}" )
@@ -123,33 +183,39 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], filename=None, to_cubit
                     raise "cone not implemented"
                     pass
                 elif surface._type == "x-cone":
-                    cmds.append( f"create frustum height {w[2]} radius {surface.coefficients['r']} top {surface.coefficients['r']}")
+                    cmds.append( f"create frustum height {w[0]} radius {math.sqrt(surface.coefficients['r2']*w[0])} top 0")
                     id = lastid()
                     cmds.append( f"rotate volume {id} about y angle 90")
                     if node.side != '-':
                         cmds.append( f"brick x {w[0]} y {w[1]} z {w[2]}" )
                         wid = lastid()
                         cmds.append( f"subtract vol {id} from vol {wid}" )
+                        move( wid, surface.coefficients['x0'], surface.coefficients['y0'], surface.coefficients['z0'] )
                         return wid
+                    move( id, surface.coefficients['x0'], surface.coefficients['y0'], surface.coefficients['z0'] )
                     return id
                 elif surface._type == "y-cone":
-                    cmds.append( f"create frustum height {w[2]} radius {surface.coefficients['r']} top {surface.coefficients['r']}")
+                    cmds.append( f"create frustum height {w[1]} radius {math.sqrt(surface.coefficients['r2']*w[1])} top 0")
                     id = lastid()
                     cmds.append( f"rotate volume {id} about x angle 90")
                     if node.side != '-':
                         cmds.append( f"brick x {w[0]} y {w[1]} z {w[2]}" )
                         wid = lastid()
                         cmds.append( f"subtract vol {id} from vol {wid}" )
+                        move( wid, surface.coefficients['x0'], surface.coefficients['y0'], surface.coefficients['z0'] )
                         return wid
+                    move( id, surface.coefficients['x0'], surface.coefficients['y0'], surface.coefficients['z0'] )
                     return id
                 elif surface._type == "z-cone":
-                    cmds.append( f"create frustum height {w[2]} radius {surface.coefficients['r']} top {surface.coefficients['r']}")
+                    cmds.append( f"create frustum height {w[2]} radius {math.sqrt(surface.coefficients['r2']*w[2])} top 0")
                     id = lastid()
                     if node.side != '-':
                         cmds.append( f"brick x {w[0]} y {w[1]} z {w[2]}" )
                         wid = lastid()
                         cmds.append( f"subtract vol {id} from vol {wid}" )
+                        move( wid, surface.coefficients['x0'], surface.coefficients['y0'], surface.coefficients['z0'] )
                         return wid
+                    move( id, surface.coefficients['x0'], surface.coefficients['y0'], surface.coefficients['z0'] )
                     return id
                 elif surface._type == "x-torus":
                     cmds.append( f"torus major radius {surface.coefficients['r']} minor radius {surface.coefficients['r']}")
@@ -159,7 +225,9 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], filename=None, to_cubit
                         cmds.append( f"brick x {w[0]} y {w[1]} z {w[2]}" )
                         wid = lastid()
                         cmds.append( f"subtract vol {id} from vol {wid}" )
+                        move( wid, surface.coefficients['x0'], surface.coefficients['y0'], surface.coefficients['z0'] )
                         return wid
+                    move( id, surface.coefficients['x0'], surface.coefficients['y0'], surface.coefficients['z0'] )
                     return id
                 elif surface._type == "y-torus":
                     cmds.append( f"torus major radius {surface.coefficients['r']} minor radius {surface.coefficients['r']}")
@@ -169,6 +237,7 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], filename=None, to_cubit
                         cmds.append( f"brick x {w[0]} y {w[1]} z {w[2]}" )
                         wid = lastid()
                         cmds.append( f"subtract vol {id} from vol {wid}" )
+                        move( wid, surface.coefficients['x0'], surface.coefficients['y0'], surface.coefficients['z0'] )
                         return wid
                     return id
                 elif surface._type == "z-torus":
@@ -178,7 +247,9 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], filename=None, to_cubit
                         cmds.append( f"brick x {w[0]} y {w[1]} z {w[2]}" )
                         wid = lastid()
                         cmds.append( f"subtract vol {id} from vol {wid}" )
+                        move( wid, surface.coefficients['x0'], surface.coefficients['y0'], surface.coefficients['z0'] )
                         return wid
+                    move( id, surface.coefficients['x0'], surface.coefficients['y0'], surface.coefficients['z0'] )
                     return id
                 else:
                     raise f"{surface.type} not implemented"
@@ -187,7 +258,11 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], filename=None, to_cubit
 
         elif isinstance(node, Complement):
             #print( ind(), "Complement:" )
-            return surface_to_cubit_journal(node.node, w, indent + 1, inner_world )
+            id = surface_to_cubit_journal(node.node, w, indent + 1, inner_world )
+            cmds.append( f"brick x {w[0]} y {w[1]} z {w[2]}" )
+            wid = lastid()
+            cmds.append( f"subtract vol {id} from vol {wid}" )
+            return wid
         elif isinstance(node, Intersection):
             #print( ind(), "Intersection:" )
             surfaces = []
