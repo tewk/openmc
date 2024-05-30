@@ -137,7 +137,7 @@ if __name__ == '__main__':
 
     if args.generate or args.run:
         model = assembly_model()
-        to_cubit_journal.to_cubit_journal( model.geometry, world=[50,50,50] )
+        to_cubit_journal.to_cubit_journal( model.geometry, world=[50,50,50], filename="assembly.jou" )
         if args.generate:
             model.export_to_xml()
         if args.run:

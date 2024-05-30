@@ -34,6 +34,15 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], filename=None, to_cubit
         cid = cid + 1
         return id
     cmds = []
+    #cmds.extend( [
+    #    "set echo off",
+    #    "set graphics off",
+    #    "set journal off",
+    #    "set undo off",
+    #    "set default autosizing off",   # especially when the CAD is complex (contains many spline surfaces) this can have a massive effect
+    #    #"set info off",
+    #    #"set warning off",
+    #    ])
 
 
     def rotate( id, x, y, z ):
@@ -177,7 +186,7 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], filename=None, to_cubit
                     move( id, surface.coefficients['x0'], surface.coefficients['y0'], 0 )
                     return id
                 elif surface._type == "sphere":
-                    print( ind(), f"surface radius {surface._radius}" )
+                    #print( ind(), f"surface radius {surface._radius}" )
                     pass
                 elif surface._type == "cone":
                     raise "cone not implemented"
@@ -302,7 +311,7 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], filename=None, to_cubit
         elif isinstance(node, None):
             pass
         else:
-            print( node )
+            #print( node )
             ##print( ind(), "Composite:", node )
             for subnode in node:
                 ##print( ind(), "Subnode:", subnode )
@@ -352,7 +361,7 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], filename=None, to_cubit
                         for us in uss:
                             k = 0
                             ring_id = ( len( uss ) - j -1 )
-                            print( "RING_ID", ring_id )
+                            #print( "RING_ID", ring_id )
                             def draw_hex_cell( n, cell, x, y ):
                                 #print( i, j, k, len( node.universes ), len( uss), len( us ), x, y )
                                 id = process_node_or_fill( cell, [ w[0], w[1], w[2] ], indent + 1, offset = [x,y,z], inner_world=[ pitch[0], pitch[0], pitch[1] ], outer_ll=outer_ll if outer_ll else [ node.center[0], node.center[1] ], hex = True )
@@ -365,9 +374,9 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], filename=None, to_cubit
                                     cmds.append( f"move volume {ids} midpoint location {x} {y} {z}" )
                             side_to_side_diameter =  pitch[0]/2 * math.sqrt( 3 )
                             center_to_mid_side_diameter = ( ( pitch[0] / 2 ) * math.sin( math.pi / 6 ) ) + pitch[0] / 2
-                            print( "diameter", pitch[0] )
-                            print( "side_to_side_diameter", side_to_side_diameter )
-                            print( "center_to_mid_side_diameter", center_to_mid_side_diameter)
+                            #print( "diameter", pitch[0] )
+                            #print( "side_to_side_diameter", side_to_side_diameter )
+                            #print( "center_to_mid_side_diameter", center_to_mid_side_diameter)
                             if ring_id < 2:
                                 for u in us:
                                     for n, cell in u._cells.items():
@@ -388,7 +397,7 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], filename=None, to_cubit
                                     y_pos = ring_id * side_to_side_diameter - ( x ) * 0.5 * side_to_side_diameter; 
                                     for n, cell in us[k]._cells.items():
                                         draw_hex_cell( n, cell, x_pos, y_pos )
-                                    print( r, k, x, x_pos, y_pos )
+                                    #print( r, k, x, x_pos, y_pos )
                                     k = k + 1
                                     x = x + 1
                                 y_pos = ring_id * side_to_side_diameter - ( x ) * 0.5 * side_to_side_diameter; 
@@ -396,7 +405,7 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], filename=None, to_cubit
                                     x_pos = x * center_to_mid_side_diameter; 
                                     for n, cell in us[k]._cells.items():
                                         draw_hex_cell( n, cell, x_pos, y_pos )
-                                    print( r, k, x, x_pos, y_pos )
+                                    #print( r, k, x, x_pos, y_pos )
                                     y_pos = y_pos - side_to_side_diameter; 
                                     k = k + 1
                                 for i in range( r, 0, -1 ):
@@ -404,7 +413,7 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], filename=None, to_cubit
                                     y_pos = - ring_id * side_to_side_diameter + ( x ) * 0.5 * side_to_side_diameter; 
                                     for n, cell in us[k]._cells.items():
                                         draw_hex_cell( n, cell, x_pos, y_pos )
-                                    print( r, k, x, x_pos, y_pos )
+                                    #print( r, k, x, x_pos, y_pos )
                                     k = k + 1
                                     x = x - 1
                                 for i in range( r, 0, -1 ):
@@ -412,7 +421,7 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], filename=None, to_cubit
                                     y_pos = - ring_id * side_to_side_diameter - ( x ) * 0.5 * side_to_side_diameter; 
                                     for n, cell in us[k]._cells.items():
                                         draw_hex_cell( n, cell, x_pos, y_pos )
-                                    print( r, k, x, x_pos, y_pos )
+                                    #print( r, k, x, x_pos, y_pos )
                                     k = k + 1
                                     x = x - 1
                                 y_pos = - ring_id * side_to_side_diameter - ( x ) * 0.5 * side_to_side_diameter; 
@@ -420,7 +429,7 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], filename=None, to_cubit
                                     x_pos = x * center_to_mid_side_diameter; 
                                     for n, cell in us[k]._cells.items():
                                         draw_hex_cell( n, cell, x_pos, y_pos )
-                                    print( r, k, x, x_pos, y_pos )
+                                    #print( r, k, x, x_pos, y_pos )
                                     y_pos = y_pos + side_to_side_diameter; 
                                     k = k + 1
                                 for i in range( r, 0, -1 ):
@@ -428,14 +437,14 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], filename=None, to_cubit
                                     y_pos = ring_id * side_to_side_diameter + ( x ) * 0.5 * side_to_side_diameter; 
                                     for n, cell in us[k]._cells.items():
                                         draw_hex_cell( n, cell, x_pos, y_pos )
-                                    print( r, k, x, x_pos, y_pos )
+                                    #print( r, k, x, x_pos, y_pos )
                                     k = k + 1
                                     x = x + 1
                             j = j + 1
                         ii = ii + 1
                 #2d hex lattice
                 else:
-                    print( node )
+                    #print( node )
                     center = [ node.center[0], node.center[1] ]
                     i = 0
                     for us in node.universes:
@@ -447,7 +456,7 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], filename=None, to_cubit
                                     r = ( len( uss ) - i -1 ) * pitch[0]
                                     x = r * math.cos( theta )
                                     y = r * math.sin( theta )
-                                    print( n, i, j, k, len( node.universes ), len( uss), len( us ), x, y, theta )
+                                    #print( n, i, j, k, len( node.universes ), len( uss), len( us ), x, y, theta )
                                     id = process_node_or_fill( cell, [ w[0], w[1], w[2] ], indent + 1, offset = [x,y], inner_world=[ pitch[0], pitch[0], pitch[1] ], outer_ll=outer_ll if outer_ll else [ node.center[0], node.center[1] ], hex = True )
                                     ids = str( id )
                                     if isinstance( id, list ):
@@ -489,6 +498,8 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], filename=None, to_cubit
                     i = i + 1
         #FIXME rotate and tranlate
         r = flatten( results )
+        if len( r ) > 0  and node.name:
+             cmds.append( f"volume {r[0]} name \"{node.name}\"" )
         #print( r )
         return r
 
