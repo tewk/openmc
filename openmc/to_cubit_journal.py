@@ -301,40 +301,32 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], filename=None, to_cubit
             return emit_get_last_id()
         elif isinstance(node, Intersection):
             #print( ind(), "Intersection:" )
-            surfaces = []
-            for subnode in node:
-                #print( ind(), "Subnode:", subnode )
-                id = surface_to_cubit_journal( subnode, w, indent + 1, inner_world,)
-                surfaces.append( id )
-            if len( surfaces) > 1:
-                last = surfaces[0]
-                for s in surfaces[1:]:
-                    cmds.append( f"intersect {{ {last} }} {{ {s} }}" )
-                    last = s
+            if len( node ) > 0:
+                last = surface_to_cubit_journal( node[0], w, indent + 1, inner_world,)
+                for subnode in node[1:]:
+                    s = surface_to_cubit_journal( subnode, w, indent + 1, inner_world,)
+                    cmds.append( f"intersect volume {{ {last} }} {{ {s} }}" )
+                    last = emit_get_last_id()
                 if inner_world:
                     cmds.append( f"brick x {inner_world[0]} y {inner_world[1]} z {inner_world[2]}" )
                     iwid = emit_get_last_id()
                     cmds.append( f"intersect {{ {last} }} {{ {iwid} }}" )
                     return emit_get_last_id()
-            return surfaces[-1]
+            return emit_get_last_id()
         elif isinstance(node, Union):
             #print( ind(), "Union:" )
-            surfaces = []
-            for subnode in node:
-                ##print( ind(), "Subnode:", subnode )
-                id = surface_to_cubit_journal( subnode, w, indent + 1, inner_world )
-                surfaces.append( id )
-            if len( surfaces) > 1:
-                last = surfaces[0]
-                for s in surfaces[1:]:
+            if len( node ) > 0:
+                last = surface_to_cubit_journal( node[0], w, indent + 1, inner_world,)
+                for subnode in node[1:]:
+                    s = surface_to_cubit_journal( subnode, w, indent + 1, inner_world,)
                     cmds.append( f"unite {{ {last} }} {{ {s} }}" )
-                    last = s
+                    last = emit_get_last_id()
                 if inner_world:
                     cmds.append( f"brick x {inner_world[0]} y {inner_world[1]} z {inner_world[2]}" )
                     iwid = emit_get_last_id()
                     cmds.append( f"intersect {{ {last} }} {{ {iwid} }}" )
                     return emit_get_last_id()
-            return surfaces[-1]
+            return emit_get_last_id()
         elif isinstance(node, None):
             pass
         else:
