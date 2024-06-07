@@ -49,7 +49,7 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], cells=None, filename=No
         cmds.append( s )
         #cmds.append( f'cubit.cmd( "{s}" )' )
 
-    def emit_get_last_id( type = "volume" ):
+    def emit_get_last_id( type = "body" ):
         idn = lastid()
         ids = f"id{idn}"
         python_cmd( f'#{{ {ids} = Id("{type}") }}' )
@@ -58,21 +58,21 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], cells=None, filename=No
     def rotate( id, x, y, z ):
         if nonzero( x, y, z ):
             phi, theta, psi = vector_to_euler_xyz( ( x, y, z ) )
-            cubit_cmd( f"volume {{ {id} }} rotate {phi} about Z" )
-            cubit_cmd( f"volume {{ {id} }} rotate {theta} about Y" )
-            cubit_cmd( f"volume {{ {id} }} rotate {psi} about X" )
+            cubit_cmd( f"body {{ {id} }} rotate {phi} about Z" )
+            cubit_cmd( f"body {{ {id} }} rotate {theta} about Y" )
+            cubit_cmd( f"body {{ {id} }} rotate {psi} about X" )
 
     def nonzero(*args):
         return any(arg!= 0 for arg in args)
 
     def move( id, x, y, z ):
         if nonzero( x, y, z ):
-           cubit_cmd( f"volume {{ {id} }} move {x} {y} {z}" )
+           cubit_cmd( f"body {{ {id} }} move {x} {y} {z}" )
 
     def make_world_brick():
         pass
         
-    def surface_to_cubit_journal(node, w, indent = 0, inner_world = None, hex = False ):
+    def surface_to_cubit_journal(node, w, indent = 0, inner_world = None, hex = False, ent_type = "body" ):
         def ind():
             return ' ' * (2*indent)
         if isinstance(node, Halfspace):
@@ -91,29 +91,29 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], cells=None, filename=No
 
                 if surface._type == "plane":
                     cmds.append( f"brick x {w[0]} y {w[1]} z {w[2]}" )
-                    ids = emit_get_last_id()
+                    ids = emit_get_last_id( ent_type )
                     phi, theta, psi = vector_to_euler_xyz( ( surface.coefficients['a'], surface.coefficients['b'], surface.coefficients['c'] ) )
-                    cmds.append( f"volume {{ { ids } }} rotate {phi} about Z" )
-                    cmds.append( f"volume {{ { ids } }} rotate {theta} about Y" )
-                    cmds.append( f"volume {{ { ids } }} rotate {psi} about X" )
-                    cmds.append( f"volume {{ { ids } }} move direction {surface.coefficients['a'] } { surface.coefficients['b']} {surface.coefficients['c']} distance {surface.coefficients['d']}" )
+                    cmds.append( f"body {{ { ids } }} rotate {phi} about Z" )
+                    cmds.append( f"body {{ { ids } }} rotate {theta} about Y" )
+                    cmds.append( f"body {{ { ids } }} rotate {psi} about X" )
+                    cmds.append( f"body {{ { ids } }} move direction {surface.coefficients['a'] } { surface.coefficients['b']} {surface.coefficients['c']} distance {surface.coefficients['d']}" )
                     return ids
                 elif surface._type == "x-plane":
                     cmds.append( f"brick x {w[0]} y {w[1]} z {w[2]}" )
-                    ids = emit_get_last_id()
-                    cmds.append( f"section volume {{ {ids} }} with xplane offset {surface.coefficients['x0']} {reverse()}")
+                    ids = emit_get_last_id( ent_type )
+                    cmds.append( f"section body {{ {ids} }} with xplane offset {surface.coefficients['x0']} {reverse()}")
                     #ids = emit_get_last_id()
                     return ids
                 elif surface._type == "y-plane":
                     cmds.append( f"brick x {w[0]} y {w[1]} z {w[2]}" )
-                    ids = emit_get_last_id()
-                    cmds.append( f"section volume {{ {ids} }} with yplane offset {surface.coefficients['y0']} {reverse()}")
+                    ids = emit_get_last_id( ent_type )
+                    cmds.append( f"section body {{ {ids} }} with yplane offset {surface.coefficients['y0']} {reverse()}")
                     #ids = emit_get_last_id()
                     return ids
                 elif surface._type == "z-plane":
                     cmds.append( f"brick x {w[0]} y {w[1]} z {w[2]}" )
-                    ids = emit_get_last_id()
-                    cmds.append( f"section volume {{ {ids} }} with zplane offset {surface.coefficients['z0']} {reverse()}")
+                    ids = emit_get_last_id( ent_type )
+                    cmds.append( f"section body {{ {ids} }} with zplane offset {surface.coefficients['z0']} {reverse()}")
                     #ids = emit_get_last_id()
                     return ids
                 elif surface._type == "cylinder":
@@ -125,15 +125,15 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], cells=None, filename=No
                         if inner_world:
                             if hex:
                                 cmds.append( f"create prism height {inner_world[2]} sides 6 radius { ( inner_world[0] / 2 ) }" )
-                                wid = emit_get_last_id()
-                                cmds.append( f"rotate vol {{ {wid} }} about z angle 30" )
+                                wid = emit_get_last_id( ent_type )
+                                cmds.append( f"rotate body {{ {wid} }} about z angle 30" )
                             else:
                                 cmds.append( f"brick x {inner_world[0]} y {inner_world[1]} z {inner_world[2]}" )
-                                wid = emit_get_last_id()
+                                wid = emit_get_last_id( ent_type )
                         else:
                             cmds.append( f"brick x {w[0]} y {w[1]} z {w[2]}" )
-                            wid = emit_get_last_id()
-                        cmds.append( f"subtract vol {{ { ids } }} from vol {{ { wid } }}" )
+                            wid = emit_get_last_id( ent_type )
+                        cmds.append( f"subtract body {{ { ids } }} from body {{ { wid } }}" )
                         rotate( wid, surface.coefficients['dx'], surface.coefficients['dy'], surface.coefficients['dz'] )
                         move( wid, surface.coefficients['x0'], surface.coefficients['y0'], surface.coefficients['z0'] )
                         return wid
@@ -143,23 +143,23 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], cells=None, filename=No
                 elif surface._type == "x-cylinder":
                     h = inner_world[0] if inner_world else w[0] 
                     cmds.append( f"cylinder height {h} radius {surface.coefficients['r']}")
-                    ids = emit_get_last_id()
-                    cmds.append( f"rotate volume {{ { ids } }} about y angle 90")
+                    ids = emit_get_last_id( ent_type )
+                    cmds.append( f"rotate body {{ { ids } }} about y angle 90")
                     if node.side != '-':
                         wid = 0
                         if inner_world:
                             if hex:
                                 cmds.append( f"create prism height {inner_world[2]} sides 6 radius { inner_world[0] / 2 } " )
-                                wid = emit_get_last_id()
-                                cmds.append( f"rotate vol {{ {wid} }} about z angle 30" )
-                                cmds.append( f"rotate vol {{ {wid} }} about y angle 90")
+                                wid = emit_get_last_id( ent_type )
+                                cmds.append( f"rotate body {{ {wid} }} about z angle 30" )
+                                cmds.append( f"rotate body {{ {wid} }} about y angle 90")
                             else:
                                 cmds.append( f"brick x {inner_world[0]} y {inner_world[1]} z {inner_world[2]}" )
-                                wid = emit_get_last_id()
+                                wid = emit_get_last_id( ent_type )
                         else:
                             cmds.append( f"brick x {w[0]} y {w[1]} z {w[2]}" )
-                            wid = emit_get_last_id()
-                        cmds.append( f"subtract vol {{ { ids } }} from vol {{ { wid } }}" )
+                            wid = emit_get_last_id( ent_type )
+                        cmds.append( f"subtract body {{ { ids } }} from body {{ { wid } }}" )
                         move( wid, 0, surface.coefficients['y0'], surface.coefficients['z0'] )
                         return wid
                     move( ids, 0, surface.coefficients['y0'], surface.coefficients['z0'] )
@@ -167,23 +167,23 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], cells=None, filename=No
                 elif surface._type == "y-cylinder":
                     h = inner_world[1] if inner_world else w[1] 
                     cmds.append( f"cylinder height {h} radius {surface.coefficients['r']}")
-                    ids = emit_get_last_id()
-                    cmds.append( f"rotate volume {{ {ids} }} about x angle 90")
+                    ids = emit_get_last_id( ent_type )
+                    cmds.append( f"rotate body {{ {ids} }} about x angle 90")
                     if node.side != '-':
                         wid = 0
                         if inner_world:
                             if hex:
                                 cmds.append( f"create prism height {inner_world[2]} sides 6 radius { ( inner_world[0] / 2) }" )
-                                wid = emit_get_last_id()
-                                cmds.append( f"rotate vol {{ {wid} }} about z angle 30" )
-                                cmds.append( f"rotate vol {{ {wid} }} about x angle 90")
+                                wid = emit_get_last_id( ent_type )
+                                cmds.append( f"rotate body {{ {wid} }} about z angle 30" )
+                                cmds.append( f"rotate body {{ {wid} }} about x angle 90")
                             else:
                                 cmds.append( f"brick x {inner_world[0]} y {inner_world[1]} z {inner_world[2]}" )
-                                wid = emit_get_last_id()
+                                wid = emit_get_last_id( ent_type )
                         else:
                             cmds.append( f"brick x {w[0]} y {w[1]} z {w[2]}" )
-                            wid = emit_get_last_id()
-                        cmds.append( f"subtract vol {{ {ids} }} from vol {{ {wid} }}" )
+                            wid = emit_get_last_id( ent_type )
+                        cmds.append( f"subtract body {{ {ids} }} from body {{ {wid} }}" )
                         move( wid, surface.coefficients['x0'], 0, surface.coefficients['z0'] )
                         return wid
                     move( ids, surface.coefficients['x0'], 0, surface.coefficients['z0'] )
@@ -191,28 +191,28 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], cells=None, filename=No
                 elif surface._type == "z-cylinder":
                     h = inner_world[2] if inner_world else w[2] 
                     cmds.append( f"cylinder height {h} radius {surface.coefficients['r']}")
-                    ids = emit_get_last_id()
+                    ids = emit_get_last_id( ent_type )
                     if node.side != '-':
                         wid = 0
                         if inner_world:
                             if hex:
                                 cmds.append( f"create prism height {inner_world[2]} sides 6 radius { ( inner_world[0] / 2 ) }" )
-                                wid = emit_get_last_id()
-                                cmds.append( f"rotate vol {{ {wid} }} about z angle 30" )
+                                wid = emit_get_last_id( ent_type )
+                                cmds.append( f"rotate body {{ {wid} }} about z angle 30" )
                             else:
                                 cmds.append( f"brick x {inner_world[0]} y {inner_world[1]} z {inner_world[2]}" )
-                                wid = emit_get_last_id()
+                                wid = emit_get_last_id( ent_type )
                         else:
                             cmds.append( f"brick x {w[0]} y {w[1]} z {w[2]}" )
-                            wid = emit_get_last_id()
-                        cmds.append( f"subtract vol {{ { ids } }} from vol {{ { wid } }}" )
+                            wid = emit_get_last_id( ent_type )
+                        cmds.append( f"subtract body {{ { ids } }} from body {{ { wid } }}" )
                         move( wid, surface.coefficients['x0'], surface.coefficients['y0'], 0 )
                         return wid
                     move( ids, surface.coefficients['x0'], surface.coefficients['y0'], 0 )
                     return ids
                 elif surface._type == "sphere":
                     cmds.append( f"sphere redius {surface.coefficients['r']}")
-                    ids = emit_get_last_id()
+                    ids = emit_get_last_id( ent_type )
                     move( ids, surface.coefficients['x0'], surface.coefficients['y0'], surface.coefficients['zy0'] )
                     pass
                 elif surface._type == "cone":
@@ -220,69 +220,69 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], cells=None, filename=No
                     pass
                 elif surface._type == "x-cone":
                     cmds.append( f"create frustum height {w[0]} radius {math.sqrt(surface.coefficients['r2']*w[0])} top 0")
-                    ids = emit_get_last_id()
-                    cmds.append( f"rotate volume {{ {ids} }} about y angle 90")
+                    ids = emit_get_last_id( ent_type )
+                    cmds.append( f"rotate body {{ {ids} }} about y angle 90")
                     if node.side != '-':
                         cmds.append( f"brick x {w[0]} y {w[1]} z {w[2]}" )
-                        wid = emit_get_last_id()
-                        cmds.append( f"subtract vol {{ {ids} }} from vol {{ {wid} }}" )
+                        wid = emit_get_last_id( ent_type )
+                        cmds.append( f"subtract body {{ {ids} }} from body {{ {wid} }}" )
                         move( wid, surface.coefficients['x0'], surface.coefficients['y0'], surface.coefficients['z0'] )
                         return wid
                     move( ids, surface.coefficients['x0'], surface.coefficients['y0'], surface.coefficients['z0'] )
                     return ids
                 elif surface._type == "y-cone":
                     cmds.append( f"create frustum height {w[1]} radius {math.sqrt(surface.coefficients['r2']*w[1])} top 0")
-                    ids = emit_get_last_id()
-                    cmds.append( f"rotate volume {{ {ids} }} about x angle 90")
+                    ids = emit_get_last_id( ent_type )
+                    cmds.append( f"rotate body {{ {ids} }} about x angle 90")
                     if node.side != '-':
                         cmds.append( f"brick x {w[0]} y {w[1]} z {w[2]}" )
-                        wid = emit_get_last_id()
-                        cmds.append( f"subtract vol {{ {ids} }} from vol {{ {wid} }}" )
+                        wid = emit_get_last_id( ent_type )
+                        cmds.append( f"subtract body {{ {ids} }} from body {{ {wid} }}" )
                         move( wid, surface.coefficients['x0'], surface.coefficients['y0'], surface.coefficients['z0'] )
                         return wid
                     move( ids, surface.coefficients['x0'], surface.coefficients['y0'], surface.coefficients['z0'] )
                     return ids
                 elif surface._type == "z-cone":
                     cmds.append( f"create frustum height {w[2]} radius {math.sqrt(surface.coefficients['r2']*w[2])} top 0")
-                    ids = emit_get_last_id()
+                    ids = emit_get_last_id( ent_type )
                     if node.side != '-':
                         cmds.append( f"brick x {w[0]} y {w[1]} z {w[2]}" )
-                        wid = emit_get_last_id()
-                        cmds.append( f"subtract vol {{ {ids} }} from vol {{ {wid} }}" )
+                        wid = emit_get_last_id( ent_type )
+                        cmds.append( f"subtract body {{ {ids} }} from body {{ {wid} }}" )
                         move( wid, surface.coefficients['x0'], surface.coefficients['y0'], surface.coefficients['z0'] )
                         return wid
                     move( ids, surface.coefficients['x0'], surface.coefficients['y0'], surface.coefficients['z0'] )
                     return ids
                 elif surface._type == "x-torus":
                     cmds.append( f"torus major radius {surface.coefficients['r']} minor radius {surface.coefficients['r']}")
-                    ids = emit_get_last_id()
-                    cmds.append( f"rotate volume {{ {ids} }} about y angle 90")
+                    ids = emit_get_last_id( ent_type )
+                    cmds.append( f"rotate body {{ {ids} }} about y angle 90")
                     if node.side != '-':
                         cmds.append( f"brick x {w[0]} y {w[1]} z {w[2]}" )
-                        wid = emit_get_last_id()
-                        cmds.append( f"subtract vol {{ {ids} }} from vol {{ {wid} }}" )
+                        wid = emit_get_last_id( ent_type )
+                        cmds.append( f"subtract body {{ {ids} }} from body {{ {wid} }}" )
                         move( wid, surface.coefficients['x0'], surface.coefficients['y0'], surface.coefficients['z0'] )
                         return wid
                     move( ids, surface.coefficients['x0'], surface.coefficients['y0'], surface.coefficients['z0'] )
                     return ids
                 elif surface._type == "y-torus":
                     cmds.append( f"torus major radius {surface.coefficients['r']} minor radius {surface.coefficients['r']}")
-                    ids = emit_get_last_id()
-                    cmds.append( f"rotate volume {{ {ids} }} about x angle 90")
+                    ids = emit_get_last_id( ent_type )
+                    cmds.append( f"rotate body {{ {ids} }} about x angle 90")
                     if node.side != '-':
                         cmds.append( f"brick x {w[0]} y {w[1]} z {w[2]}" )
-                        wid = emit_get_last_id()
-                        cmds.append( f"subtract vol {{ {id} }} from vol {{ {wid} }}" )
+                        wid = emit_get_last_id( ent_type )
+                        cmds.append( f"subtract body {{ {id} }} from body {{ {wid} }}" )
                         move( wid, surface.coefficients['x0'], surface.coefficients['y0'], surface.coefficients['z0'] )
                         return wid
                     return ids
                 elif surface._type == "z-torus":
                     cmds.append( f"torus major radius {surface.coefficients['r']} minor radius {surface.coefficients['r']}")
-                    ids = emit_get_last_id()
+                    ids = emit_get_last_id( ent_type )
                     if node.side != '-':
                         cmds.append( f"brick x {w[0]} y {w[1]} z {w[2]}" )
-                        wid = emit_get_last_id()
-                        cmds.append( f"subtract vol {{ {ids} }} from vol {{ {wid} }}" )
+                        wid = emit_get_last_id( ent_type )
+                        cmds.append( f"subtract body {{ {ids} }} from body {{ {wid} }}" )
                         move( wid, surface.coefficients['x0'], surface.coefficients['y0'], surface.coefficients['z0'] )
                         return wid
                     move( ids, surface.coefficients['x0'], surface.coefficients['y0'], surface.coefficients['z0'] )
@@ -295,49 +295,51 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], cells=None, filename=No
 
         elif isinstance(node, Complement):
             print( "Complement:" )
-            id = surface_to_cubit_journal(node.node, w, indent + 1, inner_world )
+            id = surface_to_cubit_journal(node.node, w, indent + 1, inner_world, ent_type = ent_type )
             cmds.append( f"brick x {w[0]} y {w[1]} z {w[2]}" )
-            wid = emit_get_last_id()
-            cmds.append( f"subtract vol {{ {id} }} from vol {{ {wid} }}" )
-            return emit_get_last_id()
+            wid = emit_get_last_id( ent_type )
+            cmds.append( f"subtract body {{ {id} }} from body {{ {wid} }}" )
+            return emit_get_last_id( ent_type )
         elif isinstance(node, Intersection):
             #print( ind(), "Intersection:" )
             if len( node ) > 0:
-                last = surface_to_cubit_journal( node[0], w, indent + 1, inner_world,)
+                last = surface_to_cubit_journal( node[0], w, indent + 1, inner_world, ent_type = ent_type ,)
                 for subnode in node[1:]:
-                    s = surface_to_cubit_journal( subnode, w, indent + 1, inner_world,)
-                    cmds.append( f"intersect volume {{ {last} }} {{ {s} }}" )
-                    last = emit_get_last_id()
+                    s = surface_to_cubit_journal( subnode, w, indent + 1, inner_world, ent_type = ent_type ,)
+                    cmds.append( f"intersect {ent_type} {{ {last} }} {{ {s} }}" )
+                    last = emit_get_last_id( ent_type )
                 if inner_world:
                     cmds.append( f"brick x {inner_world[0]} y {inner_world[1]} z {inner_world[2]}" )
-                    iwid = emit_get_last_id()
-                    cmds.append( f"intersect {{ {last} }} {{ {iwid} }}" )
-                    return emit_get_last_id()
+                    iwid = emit_get_last_id( ent_type )
+                    cmds.append( f"intersect {ent_type} {{ {last} }} {{ {iwid} }}" )
+                    return emit_get_last_id( ent_type )
             return emit_get_last_id()
         elif isinstance(node, Union):
             #print( ind(), "Union:" )
             if len( node ) > 0:
-                last = surface_to_cubit_journal( node[0], w, indent + 1, inner_world,)
+                local_ent_type = "body"
+                first = surface_to_cubit_journal( node[0], w, indent + 1, inner_world, ent_type = local_ent_type )
                 for subnode in node[1:]:
-                    s = surface_to_cubit_journal( subnode, w, indent + 1, inner_world,)
-                    cmds.append( f"unite volume {{ {last} }} {{ {s} }}" )
-                    last = emit_get_last_id()
+                    s = surface_to_cubit_journal( subnode, w, indent + 1, inner_world, ent_type = local_ent_type )
+                    cmds.append( f"unite {local_ent_type} {{ {first} }} {{ {s} }}" )
                 if inner_world:
                     cmds.append( f"brick x {inner_world[0]} y {inner_world[1]} z {inner_world[2]}" )
-                    iwid = emit_get_last_id()
-                    cmds.append( f"intersect {{ {last} }} {{ {iwid} }}" )
-                    return emit_get_last_id()
-            return emit_get_last_id()
+                    iwid = emit_get_last_id( local_ent_type )
+                    cmds.append( f"intersect {ent_type} {{ {last} }} {{ {iwid} }}" )
+                    return first
+            return first
         elif isinstance(node, None):
             pass
         else:
+            print( f"{node} not implemented" )
+            raise f"{node} not implemented"
             #print( node )
             ##print( ind(), "Composite:", node )
             for subnode in node:
                 ##print( ind(), "Subnode:", subnode )
-                surface_to_cubit_journal( subnode, w, indent + 1, inner_world )
+                surface_to_cubit_journal( subnode, w, indent + 1, inner_world, ent_type = ent_type )
 
-    def process_node_or_fill( node, w, indent = 0, offset = [0, 0], inner_world = None, outer_ll = None, hex = False ):
+    def process_node_or_fill( node, w, indent = 0, offset = [0, 0], inner_world = None, outer_ll = None, ent_type = "body", hex = False ):
         def ind():
             return ' ' * (2*indent)
         #if not ( node in seen ):
@@ -351,8 +353,8 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], cells=None, filename=No
                 results.append( id )
             elif hex:
                 cmds.append( f"create prism height {inner_world[2]} sides 6 radius { ( inner_world[0] / 2) }" )
-                wid = emit_get_last_id()
-                cmds.append( f"rotate vol {{ {wid} }} about z angle 30" )
+                wid = emit_get_last_id( ent_type )
+                cmds.append( f"rotate body {{ {wid} }} about z angle 30" )
                 results.append( wid )
 
         if hasattr( node, "fill" ) and isinstance(node.fill, Lattice):
@@ -391,7 +393,7 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], cells=None, filename=No
                                 else:
                                     pass
                                 if ids != '':
-                                    cmds.append( f"move volume {{ {ids} }} midpoint location {x} {y} {z}" )
+                                    cmds.append( f"move body {{ {ids} }} midpoint location {x} {y} {z}" )
                             side_to_side_diameter =  pitch[0]/2 * math.sqrt( 3 )
                             center_to_mid_side_diameter = ( ( pitch[0] / 2 ) * math.sin( math.pi / 6 ) ) + pitch[0] / 2
                             #print( "diameter", pitch[0] )
@@ -486,7 +488,7 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], cells=None, filename=No
                                         #results.append( id )
                                         pass
                                     if ids != '':
-                                        cmds.append( f"move volume {{ {ids} }} midpoint location {x} {y} {z}" )
+                                        cmds.append( f"move body {{ {ids} }} midpoint location {x} {y} {z}" )
                             j = j + 1
                         i = i + 1
 
@@ -513,13 +515,13 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], cells=None, filename=No
                                 #results.append( id )
                                 pass
                             if ids != '':
-                                cmds.append( f"move volume {{ {ids} }} midpoint location {x} {y} 0 except z" )
+                                cmds.append( f"move body {{ {ids} }} midpoint location {x} {y} 0 except z" )
                         j = j + 1
                     i = i + 1
         #FIXME rotate and tranlate
         r = flatten( results )
         if len( r ) > 0  and node.name:
-             cmds.append( f"volume {{ {r[0]} }} name \"{node.name}\"" )
+             cmds.append( f"body {{ {r[0]} }} name \"{node.name}\"" )
         #print( r )
         return r
 
