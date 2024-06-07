@@ -25,7 +25,7 @@ def vector_to_euler_xyz(v):
     oe = 180 / math.pi 
     return phi * oe, theta * oe, psi * oe
 
-def to_cubit_journal(geom, seen=set(), world=[60,60,60], filename=None, to_cubit=False ):
+def to_cubit_journal(geom, seen=set(), world=[60,60,60], cells=None, filename=None, to_cubit=False ):
     w = world
     cid = 1
     def lastid():
@@ -49,25 +49,25 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], filename=None, to_cubit
         cmds.append( s )
         #cmds.append( f'cubit.cmd( "{s}" )' )
 
-    def emit_get_last_id( ):
+    def emit_get_last_id( type = "volume" ):
         idn = lastid()
         ids = f"id{idn}"
-        python_cmd( f'#{{ {ids} = Id("volume") }}' )
+        python_cmd( f'#{{ {ids} = Id("{type}") }}' )
         return ids
 
     def rotate( id, x, y, z ):
         if nonzero( x, y, z ):
             phi, theta, psi = vector_to_euler_xyz( ( x, y, z ) )
-            cubit_cmd( f"body {{ {id} }} rotate {phi} about Z" )
-            cubit_cmd( f"body {{ {id} }} rotate {theta} about Y" )
-            cubit_cmd( f"body {{ {id} }} rotate {psi} about X" )
+            cubit_cmd( f"volume {{ {id} }} rotate {phi} about Z" )
+            cubit_cmd( f"volume {{ {id} }} rotate {theta} about Y" )
+            cubit_cmd( f"volume {{ {id} }} rotate {psi} about X" )
 
     def nonzero(*args):
         return any(arg!= 0 for arg in args)
 
     def move( id, x, y, z ):
         if nonzero( x, y, z ):
-           cubit_cmd( f"body {{ {id} }} move {x} {y} {z}" )
+           cubit_cmd( f"volume {{ {id} }} move {x} {y} {z}" )
 
     def make_world_brick():
         pass
@@ -93,10 +93,10 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], filename=None, to_cubit
                     cmds.append( f"brick x {w[0]} y {w[1]} z {w[2]}" )
                     ids = emit_get_last_id()
                     phi, theta, psi = vector_to_euler_xyz( ( surface.coefficients['a'], surface.coefficients['b'], surface.coefficients['c'] ) )
-                    cmds.append( f"body {{ { ids } }} rotate {phi} about Z" )
-                    cmds.append( f"body {{ { ids } }} rotate {theta} about Y" )
-                    cmds.append( f"body {{ { ids } }} rotate {psi} about X" )
-                    cmds.append( f"body {{ { ids } }} move direction {surface.coefficients['a'] } { surface.coefficients['b']} {surface.coefficients['c']} distance {surface.coefficients['d']}" )
+                    cmds.append( f"volume {{ { ids } }} rotate {phi} about Z" )
+                    cmds.append( f"volume {{ { ids } }} rotate {theta} about Y" )
+                    cmds.append( f"volume {{ { ids } }} rotate {psi} about X" )
+                    cmds.append( f"volume {{ { ids } }} move direction {surface.coefficients['a'] } { surface.coefficients['b']} {surface.coefficients['c']} distance {surface.coefficients['d']}" )
                     return ids
                 elif surface._type == "x-plane":
                     cmds.append( f"brick x {w[0]} y {w[1]} z {w[2]}" )
@@ -183,7 +183,7 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], filename=None, to_cubit
                         else:
                             cmds.append( f"brick x {w[0]} y {w[1]} z {w[2]}" )
                             wid = emit_get_last_id()
-                        cmds.append( f"subtract vol {{ {id} }} from vol {{ {wid} }}" )
+                        cmds.append( f"subtract vol {{ {ids} }} from vol {{ {wid} }}" )
                         move( wid, surface.coefficients['x0'], 0, surface.coefficients['z0'] )
                         return wid
                     move( ids, surface.coefficients['x0'], 0, surface.coefficients['z0'] )
@@ -288,6 +288,7 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], filename=None, to_cubit
                     move( ids, surface.coefficients['x0'], surface.coefficients['y0'], surface.coefficients['z0'] )
                     return ids
                 else:
+                    print( f"{surface.type} not implemented" )
                     raise f"{surface.type} not implemented"
             #else:
             #    print( ind(), node )
@@ -319,7 +320,7 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], filename=None, to_cubit
                 last = surface_to_cubit_journal( node[0], w, indent + 1, inner_world,)
                 for subnode in node[1:]:
                     s = surface_to_cubit_journal( subnode, w, indent + 1, inner_world,)
-                    cmds.append( f"unite {{ {last} }} {{ {s} }}" )
+                    cmds.append( f"unite volume {{ {last} }} {{ {s} }}" )
                     last = emit_get_last_id()
                 if inner_world:
                     cmds.append( f"brick x {inner_world[0]} y {inner_world[1]} z {inner_world[2]}" )
@@ -524,9 +525,19 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], filename=None, to_cubit
 
     #print( geom.root_universe )
     for cell in geom.root_universe._cells.values():
-        process_node_or_fill( cell, w )
+        if cells:
+            if cell.id in cells:
+                vol_or_body = process_node_or_fill( cell, w )
+                if cell.fill_type == "material":
+                    cmds.append( f'group \"Material {cell.fill.id}\" add {{ { vol_or_body[0] } }} ' )
+        else:
+            vol_or_body = process_node_or_fill( cell, w )
+            if cell.fill_type == "material":
+                cmds.append( f'group \"Material {cell.fill.id}\" add {{ { vol_or_body[0] } }} ' )
 
     if filename:
+        cmds.append( f"save as \"ATR2.cub\" overwrite")
+        cmds.append( f"quit" )
         with open( filename, "w" ) as f:
             for x in cmds:
                 f.write( x + "\n" )
