@@ -1,9 +1,143 @@
 import math
 import sys
 from openmc.region import Region, Complement, Intersection, Union
-from openmc.surface import Halfspace
+from openmc.surface import Halfspace, Quadric
 from openmc.lattice import Lattice, HexLattice
+from numpy.linalg import matrix_rank
+import numpy as np
+            
+ELLIPSOID = 1
+ONE_SHEET_HYPERBOLOID = 2
+TWO_SHEET_HYPERBOLOID = 3
+ELLIPTIC_CONE = 4
+ELLIPTIC_PARABOLOID = 5
+HYPERBOLIC_PARABOLOID = 6
+ELLIPTIC_CYLINDER = 7
+HYPERBOLIC_CYLINDER = 8
+PARABOLIC_CYLINDER = 9
 
+def characterize_general_quadratic( surface ): #s surface
+    gq_tol = 1e-6
+    a = surface.coefficients['a']  
+    b = surface.coefficients['b']  
+    c = surface.coefficients['c']  
+    d = surface.coefficients['d']  
+    e = surface.coefficients['e']  
+    f = surface.coefficients['f']  
+    g = surface.coefficients['g']  
+    h = surface.coefficients['h']  
+    j = surface.coefficients['j']  
+    k = surface.coefficients['k']  
+    #coefficient matrix
+    Aa = np.matrix([[a, d/2, f/2], 
+               [d/2, b, e/2],
+               [f/2, e/2, c]])
+    #hessian matrix
+    Ac = np.matrix([[a, d/2, f/2, g/2], 
+               [d/2, b, e/2, h/2],
+               [f/2, e/2, c, j/2],
+               [g/2, h/2, j/2, k]])
+    rank_Aa = matrix_rank( Aa )
+    rank_Ac = matrix_rank( Ac )
+    
+    det_Ac = np.linalg.det(Ac)
+    if np.abs( det_Ac < gq_tol ):
+        delta = 0
+    else:
+        delta = -1 if det_Ac < 0 else -1
+    eigen_results = np.linalg.eig(Aa);
+    signs = np.array([ 0, 0, 0 ])
+    for i in range( 0, 3 ):
+        if eigen_results.eigenvalues[ i ] > -1 * gq_tol:
+            signs[i] = 1
+        else:
+            signs[i] = -1
+
+    S = 1 if np.abs( signs.sum() ) == 3 else -1
+
+    B = np.array([[ -g/2], [-h/2], [-j/2 ]])
+
+    Aai = np.linalg.pinv( Aa )
+
+    C = Aai * B
+
+    dx = C[0]
+    dy = C[1]
+    dz = C[2]
+
+    #Update the constant using the resulting translation
+    K_ = k + g/2*dx + h/2*dy + j/2*dz
+
+    if rank_Aa == 2 and rank_Ac == 3 and S == 1:
+        delta = -1 if K_ * signs[0] else 1
+
+    D = -1 if K_ * signs[0] else 1
+
+
+    def find_type( rAa, rAc, delta, S, D ):
+        if 3 == rAa and 4 == rAc and -1 == delta and 1 == S:
+            return ELLIPSOID
+        elif 3 == rAa and 4 == rAc and 1 == delta and -1 == S:
+            return ONE_SHEET_HYPERBOLOID
+        elif 3 == rAa and 4 == rAc and -1 == delta and -1 == S:
+            return TWO_SHEET_HYPERBOLOID
+        elif 3 == rAa and 3 == rAc and 0 == delta and -1 == S:
+            return ELLIPTIC_CONE
+        elif 2 == rAa and 4 == rAc and -1 == delta and 1 == S:
+            return ELLIPTIC_PARABOLOID
+        elif 2 == rAa and 4 == rAc and 1 == delta and -1 == S:
+            return HYPERBOLIC_PARABOLOID
+        elif 2 == rAa and 3 == rAc and -1 == delta and 1 == S:
+            return ELLIPTIC_CYLINDER
+        elif 2 == rAa and 3 == rAc and 0 == delta and -1 == S:
+            return HYPERBOLIC_CYLINDER
+        elif 2 == rAa and 3 == rAc and 0 == delta and 1 == S:
+            return PARABOLIC_CYLINDER
+        elif 2 == rAa and 3 == rAc and 1 == S and D != 0 :
+            return find_type( rAa, rAc, D, S, 0 )
+        else:
+            raise "UNKNOWN QUADRATIC"
+        
+    gq_type = find_type( rank_Aa, rank_Ac, delta, S, D )
+    
+    #set the translation
+    translation = C
+
+    rotation_matrix = eigen_results.eigenvectors
+    eigenvalues = eigen_results.eigenvalues
+    
+    for i in range( 0, 3 ):
+        if abs(eigenvalues[i]) < gq_tol:
+            eigenvalues[i] = 0
+        
+    A_ = eigenvalues[0]
+    B_ = eigenvalues[1]
+    C_ = eigenvalues[2];
+    D_ = 0; E_ = 0; F_ = 0;
+    G_ = 0; H_ = 0; J_ = 0;
+    if gq_type == ONE_SHEET_HYPERBOLOID:
+        if abs( K_) < equivalence_tol:
+           K_ = 0
+           return ELLIPTIC_CONE
+    if gq_type == TWO_SHEET_HYPERBOLOID:
+        if abs( K_) < equivalence_tol:
+           K_ = 0
+           return ELLIPTIC_CONE
+    if gq_type == ELLIPSOID:
+        if abs( A_) < equivalence_tol:
+           A_ = 0
+           return ELLIPTIC_CYLINDER
+        elif abs( B_) < equivalence_tol:
+           B_ = 0
+           return ELLIPTIC_CYLINDER
+        elif abs( C_) < equivalence_tol:
+           C_ = 0
+           return ELLIPTIC_CYLINDER
+    else:
+        return ( gq_type, A_, B_, C_, K_, translation, rotation_matrix )
+
+
+    
 def flatten(S):
     if S == []:
         return S
@@ -48,6 +182,10 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], cells=None, filename=No
     def cubit_cmd( s ):
         cmds.append( s )
         #cmds.append( f'cubit.cmd( "{s}" )' )
+
+    def new_variable( ):
+        idn = lastid()
+        return f"id{idn}"
 
     def emit_get_last_id( type = "body" ):
         idn = lastid()
@@ -287,6 +425,46 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], cells=None, filename=No
                         return wid
                     move( ids, surface.coefficients['x0'], surface.coefficients['y0'], surface.coefficients['z0'] )
                     return ids
+                elif surface._type == "quadric":
+                    ( gq_type, A_, B_, C_, K_, translation, rotation_matrix ) = characterize_general_quadratic( surface )
+                    #print( "Quadric", characterize_general_quadratic( surface ) )
+                    #print( gq_type, A_, B_, C_, K_ )
+                    print( translation )
+                    #print( rotation_matrix )
+                    if gq_type == 7:
+                        if A_ == 0:
+                            print( "X", gq_type, A_, B_, C_, K_ )
+                            h = inner_world[0] if inner_world else w[0] 
+                            r1 = math.sqrt( abs( K_/C_ ) )
+                            r2 = math.sqrt( abs( K_/B_ ) )
+                            cmds.append( f"cylinder height {h} Major Radius {r1} Minor Radius {r2}")
+                            ids = emit_get_last_id( ent_type )
+                            cmds.append( f"rotate body {{ { ids } }} about y angle 90")
+                            #rotate( ids, surface.coefficients['dx'], surface.coefficients['dy'], surface.coefficients['dz'] )
+                            move( ids, translation[0,0], translation[1,0], translation[2,0] )
+                            return ids
+                        if B_ == 0:
+                            print( "Y", gq_type, A_, B_, C_, K_ )
+                            h = inner_world[1] if inner_world else w[1] 
+                            r1 = math.sqrt( abs( K_/A_ ) )
+                            r2 = math.sqrt( abs( K_/C_ ) )
+                            cmds.append( f"cylinder height {h} Major Radius {r1} Minor Radius {r2}")
+                            ids = emit_get_last_id( ent_type )
+                            cmds.append( f"rotate body {{ { ids } }} about x angle 90")
+                            move( ids, translation[0,0], translation[1,0], translation[2,0] )
+                            return ids
+                        if C_ == 0:
+                            print( "Z", gq_type, A_, B_, C_, K_ )
+                            h = inner_world[2] if inner_world else w[2] 
+                            r1 = math.sqrt( abs( K_/A_ ) )
+                            r2 = math.sqrt( abs( K_/B_ ) )
+                            cmds.append( f"cylinder height {h} Major Radius {r1} Minor Radius {r2}")
+                            ids = emit_get_last_id( ent_type )
+                            move( ids, translation[0,0], translation[1,0], translation[2,0] )
+                            return ids
+                    else:
+                        raise f"{surface.type} not implemented"
+
                 else:
                     print( f"{surface.type} not implemented" )
                     raise f"{surface.type} not implemented"
@@ -302,18 +480,25 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], cells=None, filename=No
             return emit_get_last_id( ent_type )
         elif isinstance(node, Intersection):
             #print( ind(), "Intersection:" )
+            last = 0
             if len( node ) > 0:
                 last = surface_to_cubit_journal( node[0], w, indent + 1, inner_world, ent_type = ent_type ,)
                 for subnode in node[1:]:
                     s = surface_to_cubit_journal( subnode, w, indent + 1, inner_world, ent_type = ent_type ,)
+                    before = emit_get_last_id()
                     cmds.append( f"intersect {ent_type} {{ {last} }} {{ {s} }}" )
-                    last = emit_get_last_id( ent_type )
+                    after = emit_get_last_id()
+                    last = new_variable();
+                    cmds.append( f"#{{{last} = ( {before} == {after} ) ? {s} : {after}}}" )
+                    #last = emit_get_last_id( ent_type )
+                    #last = s
                 if inner_world:
                     cmds.append( f"brick x {inner_world[0]} y {inner_world[1]} z {inner_world[2]}" )
                     iwid = emit_get_last_id( ent_type )
                     cmds.append( f"intersect {ent_type} {{ {last} }} {{ {iwid} }}" )
                     return emit_get_last_id( ent_type )
-            return emit_get_last_id()
+            return last
+            #return last
         elif isinstance(node, Union):
             #print( ind(), "Union:" )
             if len( node ) > 0:
@@ -328,7 +513,7 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], cells=None, filename=No
                     cmds.append( f"intersect {ent_type} {{ {last} }} {{ {iwid} }}" )
                     return first
             return first
-        elif isinstance(node, None):
+        elif isinstance(node, Quadric):
             pass
         else:
             print( f"{node} not implemented" )
@@ -520,25 +705,35 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], cells=None, filename=No
                     i = i + 1
         #FIXME rotate and tranlate
         r = flatten( results )
-        if len( r ) > 0  and node.name:
-             cmds.append( f"body {{ {r[0]} }} name \"{node.name}\"" )
+        if len( r ) > 0:
+            if node.name:
+                cmds.append( f"body {{ {r[0]} }} name \"{node.name}\"" )
+            else: 
+                cmds.append( f"body {{ {r[0]} }} name \"Cell_{node.id}\"" )
         #print( r )
         return r
 
     #print( geom.root_universe )
+    def do_cell( cell ):
+        before = len( cmds )
+        cmds.append( f"#CELL {cell.id}" )
+        vol_or_body = process_node_or_fill( cell, w )
+        if cell.fill_type == "material":
+            cmds.append( f'group \"Material_{cell.fill.id}\" add body {{ { vol_or_body[0] } }} ' )
+        after = len( cmds )
+        with open( filename + f"_cell{cell.id}", "w" ) as f:
+            for x in cmds[before:after]:
+                f.write( x + "\n" )
+
     for cell in geom.root_universe._cells.values():
         if cells:
             if cell.id in cells:
-                vol_or_body = process_node_or_fill( cell, w )
-                if cell.fill_type == "material":
-                    cmds.append( f'group \"Material {cell.fill.id}\" add {{ { vol_or_body[0] } }} ' )
+                do_cell( cell )
         else:
-            vol_or_body = process_node_or_fill( cell, w )
-            if cell.fill_type == "material":
-                cmds.append( f'group \"Material {cell.fill.id}\" add {{ { vol_or_body[0] } }} ' )
+            do_cell( cell )
 
     if filename:
-        cmds.append( f"save as \"ATR2.cub\" overwrite")
+        cmds.append( f"save as \"OPENMC_TO_CUBIT.cub\" overwrite")
         cmds.append( f"quit" )
         with open( filename, "w" ) as f:
             for x in cmds:
