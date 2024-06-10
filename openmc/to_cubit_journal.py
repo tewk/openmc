@@ -18,6 +18,7 @@ PARABOLIC_CYLINDER = 9
 
 def characterize_general_quadratic( surface ): #s surface
     gq_tol = 1e-6
+    equivalence_tol = 1e-8
     a = surface.coefficients['a']  
     b = surface.coefficients['b']  
     c = surface.coefficients['c']  
@@ -29,11 +30,13 @@ def characterize_general_quadratic( surface ): #s surface
     j = surface.coefficients['j']  
     k = surface.coefficients['k']  
     #coefficient matrix
-    Aa = np.matrix([[a, d/2, f/2], 
+    Aa = np.matrix([
+               [a, d/2, f/2], 
                [d/2, b, e/2],
                [f/2, e/2, c]])
     #hessian matrix
-    Ac = np.matrix([[a, d/2, f/2, g/2], 
+    Ac = np.matrix([
+               [a, d/2, f/2, g/2], 
                [d/2, b, e/2, h/2],
                [f/2, e/2, c, j/2],
                [g/2, h/2, j/2, k]])
@@ -41,7 +44,7 @@ def characterize_general_quadratic( surface ): #s surface
     rank_Ac = matrix_rank( Ac )
     
     det_Ac = np.linalg.det(Ac)
-    if np.abs( det_Ac < gq_tol ):
+    if np.abs( det_Ac ) < gq_tol:
         delta = 0
     else:
         delta = -1 if det_Ac < 0 else -1
@@ -234,7 +237,14 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], cells=None, filename=No
                     cmds.append( f"body {{ { ids } }} rotate {phi} about Z" )
                     cmds.append( f"body {{ { ids } }} rotate {theta} about Y" )
                     cmds.append( f"body {{ { ids } }} rotate {psi} about X" )
-                    cmds.append( f"body {{ { ids } }} move direction {surface.coefficients['a'] } { surface.coefficients['b']} {surface.coefficients['c']} distance {surface.coefficients['d']}" )
+                    ca = surface.coefficients['a']
+                    cb = surface.coefficients['b']
+                    cc = surface.coefficients['c']
+                    cd = surface.coefficients['d']
+                    n = np.array([ca, cb, cc ])
+                    n_length = np.linalg.norm(n)
+                    dd = cd / n_length 
+                    cmds.append( f"body {{ { ids } }} move direction {ca} {cb} {cc} distance {dd}" )
                     return ids
                 elif surface._type == "x-plane":
                     cmds.append( f"brick x {w[0]} y {w[1]} z {w[2]}" )
@@ -429,11 +439,19 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], cells=None, filename=No
                     ( gq_type, A_, B_, C_, K_, translation, rotation_matrix ) = characterize_general_quadratic( surface )
                     #print( "Quadric", characterize_general_quadratic( surface ) )
                     #print( gq_type, A_, B_, C_, K_ )
-                    print( translation )
+                    #print( translation )
                     #print( rotation_matrix )
-                    if gq_type == 7:
+                    if gq_type == ELLIPSOID : #1
+                            r1 = math.sqrt( abs( -K_/A_ ) )
+                            r2 = math.sqrt( abs( -K_/B_ ) )
+                            r3 = math.sqrt( abs( -K_/C_ ) )
+                            cmds.append( f"sphere redius 1")
+                            ids = emit_get_last_id( ent_type )
+                            cmds.append( f"body {{ { ids } }} scale x { r1 } y { r2 } z { r3 }")
+                            move( ids, translation[0,0], translation[1,0], translation[2,0] )
+                    elif gq_type == ELLIPTIC_CYLINDER : #7
                         if A_ == 0:
-                            print( "X", gq_type, A_, B_, C_, K_ )
+                            #print( "X", gq_type, A_, B_, C_, K_ )
                             h = inner_world[0] if inner_world else w[0] 
                             r1 = math.sqrt( abs( K_/C_ ) )
                             r2 = math.sqrt( abs( K_/B_ ) )
@@ -444,7 +462,7 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], cells=None, filename=No
                             move( ids, translation[0,0], translation[1,0], translation[2,0] )
                             return ids
                         if B_ == 0:
-                            print( "Y", gq_type, A_, B_, C_, K_ )
+                            #print( "Y", gq_type, A_, B_, C_, K_ )
                             h = inner_world[1] if inner_world else w[1] 
                             r1 = math.sqrt( abs( K_/A_ ) )
                             r2 = math.sqrt( abs( K_/C_ ) )
@@ -454,12 +472,63 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], cells=None, filename=No
                             move( ids, translation[0,0], translation[1,0], translation[2,0] )
                             return ids
                         if C_ == 0:
-                            print( "Z", gq_type, A_, B_, C_, K_ )
+                            #print( "Z", gq_type, A_, B_, C_, K_ )
                             h = inner_world[2] if inner_world else w[2] 
                             r1 = math.sqrt( abs( K_/A_ ) )
                             r2 = math.sqrt( abs( K_/B_ ) )
                             cmds.append( f"cylinder height {h} Major Radius {r1} Minor Radius {r2}")
                             ids = emit_get_last_id( ent_type )
+                            move( ids, translation[0,0], translation[1,0], translation[2,0] )
+                            return ids
+                    elif gq_type == ELLIPTIC_CONE : #3
+                        if A_ == 0:
+                            #print( "X", gq_type, A_, B_, C_, K_ )
+                            h = inner_world[0] if inner_world else w[0] 
+                            minor = math.sqrt( abs( -A_/C_ ) )
+                            major = math.sqrt( abs( -A_/B_ ) )
+                            rot_angle = - 90
+                            rot_axis = 1
+                            cmds.append( f"create frustum height {h} Major Radius {major} Minor Radius {minor} top 0")
+                            ids = emit_get_last_id( ent_type )
+                            cmds.append( f"rotate body {{ { ids } }} about y angle -90")
+                            cmds.append( f"copy body {{ { ids } }}") 
+                            mirror = emit_get_last_id( ent_type )
+                            cmds.append( f"rotate body {{ { mirror } }} about 0 0 0 angle 180")
+                            cmds.append( f"unit body {{ { ids } }} {{ { mirror } }}")
+                            #rotate( ids, surface.coefficients['dx'], surface.coefficients['dy'], surface.coefficients['dz'] )
+                            move( ids, translation[0,0], translation[1,0], translation[2,0] )
+                            return ids
+                        if B_ == 0:
+                            #print( "Y", gq_type, A_, B_, C_, K_ )
+                            h = inner_world[1] if inner_world else w[1] 
+                            minor = math.sqrt( abs( -B_/A_ ) )
+                            major = math.sqrt( abs( -B_/C_ ) )
+                            rot_angle = 90
+                            rot_axis = 0
+                            cmds.append( f"create frustum height {h} Major Radius {major} Minor Radius {minor} top 0")
+                            ids = emit_get_last_id( ent_type )
+                            cmds.append( f"rotate body {{ { ids } }} about x angle 90")
+                            cmds.append( f"copy body {{ { ids } }}") 
+                            mirror = emit_get_last_id( ent_type )
+                            cmds.append( f"rotate body {{ { mirror } }} about 0 0 0 angle 180")
+                            cmds.append( f"unit body {{ { ids } }} {{ { mirror } }}")
+                            #rotate( ids, surface.coefficients['dx'], surface.coefficients['dy'], surface.coefficients['dz'] )
+                            move( ids, translation[0,0], translation[1,0], translation[2,0] )
+                            return ids
+                        if C_ == 0:
+                            #print( "Z", gq_type, A_, B_, C_, K_ )
+                            h = inner_world[2] if inner_world else w[2] 
+                            minor = math.sqrt( abs( -C_/A_ ) )
+                            major = math.sqrt( abs( -C_/B_ ) )
+                            rot_angle = 180 
+                            rot_axis = 0
+                            cmds.append( f"create frustum height {h} Major Radius {major} Minor Radius {minor} top 0")
+                            ids = emit_get_last_id( ent_type )
+                            cmds.append( f"copy body {{ { ids } }}") 
+                            mirror = emit_get_last_id( ent_type )
+                            cmds.append( f"rotate body {{ { mirror } }} about 0 0 0 angle 180")
+                            cmds.append( f"unit body {{ { ids } }} {{ { mirror } }}")
+                            #rotate( ids, surface.coefficients['dx'], surface.coefficients['dy'], surface.coefficients['dz'] )
                             move( ids, translation[0,0], translation[1,0], translation[2,0] )
                             return ids
                     else:
