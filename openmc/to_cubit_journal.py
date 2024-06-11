@@ -233,18 +233,56 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], cells=None, filename=No
                 if surface._type == "plane":
                     cmds.append( f"brick x {w[0]} y {w[1]} z {w[2]}" )
                     ids = emit_get_last_id( ent_type )
-                    phi, theta, psi = vector_to_euler_xyz( ( surface.coefficients['a'], surface.coefficients['b'], surface.coefficients['c'] ) )
-                    cmds.append( f"body {{ { ids } }} rotate {phi} about Z" )
-                    cmds.append( f"body {{ { ids } }} rotate {theta} about Y" )
-                    cmds.append( f"body {{ { ids } }} rotate {psi} about X" )
                     ca = surface.coefficients['a']
                     cb = surface.coefficients['b']
                     cc = surface.coefficients['c']
                     cd = surface.coefficients['d']
                     n = np.array([ca, cb, cc ])
-                    n_length = np.linalg.norm(n)
-                    dd = cd / n_length 
-                    cmds.append( f"body {{ { ids } }} move direction {ca} {cb} {cc} distance {dd}" )
+                    maxi = 0
+                    maxv = sys.float_info.min 
+                    for i in range( 0, 3 ):
+                        if n[i] > maxv:
+                            maxi = i
+                            maxv = n[i]
+
+                    n2 = np.copy( n )
+                    n2[ maxi ] = - n2[maxi]
+                    n3 = np.cross(n, n2)
+                    n4 = np.cross(n, n3)
+                    n3 = n3/np.linalg.norm(n3)
+                    n4 = n4/np.linalg.norm(n4)
+                    ns = cd * n
+                    n3 = np.add(ns, n3)
+                    n4 = np.add(ns, n4)
+
+                    cmds.append( f"create vertex {ns[0]} {ns[1]} {ns[2]}")
+                    v1 = emit_get_last_id( "vertex" )
+                    cmds.append( f"create vertex {n3[0]} {n3[1]} {n3[2]}")
+                    v2 = emit_get_last_id( "vertex" )
+                    cmds.append( f"create vertex {n4[0]} {n4[1]} {n4[2]}")
+                    v3 = emit_get_last_id( "vertex" )
+                    cmds.append( f"create planar surface with plane vertex {{ {v1} }} vertex {{ {v2} }} vertex {{ {v3} }}")
+                    surf = emit_get_last_id( "surface" )
+                    cmds.append( f"section body {{ {ids} }} with surface {{ {surf} }} {reverse()}")
+                    cmds.append( f"del surface {{ {surf} }}")
+                    cmds.append( f"del vertex {{ {v1} }} {{ {v2} }} {{ {v3} }}")
+
+                    # phi, theta, psi = vector_to_euler_xyz( ( surface.coefficients['a'], surface.coefficients['b'], surface.coefficients['c'] ) )
+                    # cmds.append( f"body {{ { ids } }} rotate {phi} about Z" )
+                    # cmds.append( f"body {{ { ids } }} rotate {theta} about Y" )
+                    # cmds.append( f"body {{ { ids } }} rotate {psi} about X" )
+                    # ca = surface.coefficients['a']
+                    # cb = surface.coefficients['b']
+                    # cc = surface.coefficients['c']
+                    # cd = surface.coefficients['d']
+                    # n = np.array([ca, cb, cc ])
+                    # n_length = np.linalg.norm(n)
+                    # dd = cd / n_length 
+                    # print( phi, theta, psi )
+                    # print( ca, cb, cc, cd, n_length, dd )
+                    # if node.side == '-':
+                    #     dd = dd - w[0]/2
+                    # cmds.append( f"body {{ { ids } }} move direction {ca} {cb} {cc} distance {dd}" )
                     return ids
                 elif surface._type == "x-plane":
                     cmds.append( f"brick x {w[0]} y {w[1]} z {w[2]}" )
