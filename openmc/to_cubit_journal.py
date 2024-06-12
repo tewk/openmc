@@ -231,8 +231,6 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], cells=None, filename=No
                         return ""
 
                 if surface._type == "plane":
-                    cmds.append( f"brick x {w[0]} y {w[1]} z {w[2]}" )
-                    ids = emit_get_last_id( ent_type )
                     ca = surface.coefficients['a']
                     cb = surface.coefficients['b']
                     cc = surface.coefficients['c']
@@ -245,27 +243,70 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], cells=None, filename=No
                             maxi = i
                             maxv = n[i]
 
-                    n2 = np.copy( n )
-                    n2[ maxi ] = - n2[maxi]
-                    n3 = np.cross(n, n2)
-                    n4 = np.cross(n, n3)
-                    n3 = n3/np.linalg.norm(n3)
-                    n4 = n4/np.linalg.norm(n4)
                     ns = cd * n
-                    n3 = np.add(ns, n3)
-                    n4 = np.add(ns, n4)
 
-                    cmds.append( f"create vertex {ns[0]} {ns[1]} {ns[2]}")
-                    v1 = emit_get_last_id( "vertex" )
-                    cmds.append( f"create vertex {n3[0]} {n3[1]} {n3[2]}")
-                    v2 = emit_get_last_id( "vertex" )
-                    cmds.append( f"create vertex {n4[0]} {n4[1]} {n4[2]}")
-                    v3 = emit_get_last_id( "vertex" )
-                    cmds.append( f"create planar surface with plane vertex {{ {v1} }} vertex {{ {v2} }} vertex {{ {v3} }}")
-                    surf = emit_get_last_id( "surface" )
-                    cmds.append( f"section body {{ {ids} }} with surface {{ {surf} }} {reverse()}")
-                    cmds.append( f"del surface {{ {surf} }}")
-                    cmds.append( f"del vertex {{ {v1} }} {{ {v2} }} {{ {v3} }}")
+                    if False:
+                        n2 = np.copy( n )
+                        n2[ maxi ] = - n2[maxi]
+                        n3 = np.cross(n, n2)
+                        n4 = np.cross(n, n3)
+                        print( n2, n3, n4 )
+                        n3 = n3/np.linalg.norm(n3)
+                        n4 = n4/np.linalg.norm(n4)
+                        n3 = np.add(ns, n3)
+                        n4 = np.add(ns, n4)
+                        cmds.append( f"create vertex {ns[0]} {ns[1]} {ns[2]}")
+                        v1 = emit_get_last_id( "vertex" )
+                        cmds.append( f"create vertex {n3[0]} {n3[1]} {n3[2]}")
+                        v2 = emit_get_last_id( "vertex" )
+                        cmds.append( f"create vertex {n4[0]} {n4[1]} {n4[2]}")
+                        v3 = emit_get_last_id( "vertex" )
+                        cmds.append( f"create planar surface with plane vertex {{ {v1} }} vertex {{ {v2} }} vertex {{ {v3} }} Extended Absolute {w[0]}")
+                        surf = emit_get_last_id( "surface" )
+                        cmds.append( f"brick x {w[0]} y {w[1]} z {w[2]}" )
+                        ids = emit_get_last_id( ent_type )
+                        cmds.append( f"section body {{ {ids} }} with surface {{ {surf} }} {reverse()}")
+                        cmds.append( f"del surface {{ {surf} }}")
+                        cmds.append( f"del vertex {{ {v1} }} {{ {v2} }} {{ {v3} }}")
+                    else:
+                        #for some reason cubit sectioning with a surface is backwards from cubit sectioning with an axis aligned plane
+                        def lreverse():
+                            #print( node.side)
+                            if node.side == '-':
+                                    return ""
+                            else:
+                                    return "reverse"
+
+                        #print( ca, cb, cc, cd )
+                        cmds.append( f"create surface rectangle width  { 2*w[0] } zplane")
+                        sur = emit_get_last_id( "surface" )
+                        surf = emit_get_last_id( "body" )
+                        cmds.append( f"# dir {node.side}" )
+                        cmds.append( f"# c_  {ca} {cb} {cc} {cd}" )
+                        #cmds.append( f"# n  {n[0]} {n[1]} {n[2]}" )
+                        n = n/np.linalg.norm(n)
+                        ns = cd * n
+                        #cmds.append( f"# n  {n[0]} {n[1]} {n[2]}" )
+                        zn = np.array([ 0, 0, 1 ])
+                        n3 = np.cross(n, zn )
+                        dot = np.dot(n, zn )
+                        cmds.append( f"# n3 {n3[0]} {n3[1]} {n3[2]}" )
+                        #cmds.append( f"# dot {dot}" )
+                        degs = math.degrees( math.acos( np.dot( n, zn ) ) )
+                        y = np.linalg.norm( n3 )
+                        x = dot
+                        #cubit 'rotate body' introduces a negative so we compensate here with a negative
+                        angle = - math.degrees( math.atan2( y, x ) )
+                        #print( n3 )
+                        #print(  math.acos( np.dot( n, zn ) ),  math.degrees( math.acos( np.dot( n, zn ) ) ) )
+                        if n3[0] != 0 or n3[1] != 0 or n3[2] != 0:
+                            cmds.append( f"Rotate body {{ {surf} }} about 0 0 0 direction {n3[0]} {n3[1]} {n3[2]} Angle {angle}")
+                        cmds.append( f"body {{ { surf } }} move {ns[0]} {ns[1]} {ns[2]}")
+                        cmds.append( f"brick x {w[0]} y {w[1]} z {w[2]}" )
+                        ids = emit_get_last_id( ent_type )
+                        cmds.append( f"section body {{ {ids} }} with surface {{ {sur} }} {lreverse()}")
+                        cmds.append( f"del surface {{ {sur} }}")
+
 
                     # phi, theta, psi = vector_to_euler_xyz( ( surface.coefficients['a'], surface.coefficients['b'], surface.coefficients['c'] ) )
                     # cmds.append( f"body {{ { ids } }} rotate {phi} about Z" )
@@ -496,6 +537,23 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], cells=None, filename=No
                             cmds.append( f"cylinder height {h} Major Radius {r1} Minor Radius {r2}")
                             ids = emit_get_last_id( ent_type )
                             cmds.append( f"rotate body {{ { ids } }} about y angle 90")
+                            if node.side != '-':
+                                wid = 0
+                                if inner_world:
+                                    if hex:
+                                        cmds.append( f"create prism height {inner_world[2]} sides 6 radius { inner_world[0] / 2 } " )
+                                        wid = emit_get_last_id( ent_type )
+                                        cmds.append( f"rotate body {{ {wid} }} about z angle 30" )
+                                        cmds.append( f"rotate body {{ {wid} }} about y angle 90")
+                                    else:
+                                        cmds.append( f"brick x {inner_world[0]} y {inner_world[1]} z {inner_world[2]}" )
+                                        wid = emit_get_last_id( ent_type )
+                                else:
+                                    cmds.append( f"brick x {w[0]} y {w[1]} z {w[2]}" )
+                                    wid = emit_get_last_id( ent_type )
+                                cmds.append( f"subtract body {{ { ids } }} from body {{ { wid } }}" )
+                                move( wid, translation[0,0], translation[1,0], translation[2,0] )
+                                return wid
                             #rotate( ids, surface.coefficients['dx'], surface.coefficients['dy'], surface.coefficients['dz'] )
                             move( ids, translation[0,0], translation[1,0], translation[2,0] )
                             return ids
@@ -507,7 +565,25 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], cells=None, filename=No
                             cmds.append( f"cylinder height {h} Major Radius {r1} Minor Radius {r2}")
                             ids = emit_get_last_id( ent_type )
                             cmds.append( f"rotate body {{ { ids } }} about x angle 90")
+                            if node.side != '-':
+                                wid = 0
+                                if inner_world:
+                                    if hex:
+                                        cmds.append( f"create prism height {inner_world[2]} sides 6 radius { inner_world[0] / 2 } " )
+                                        wid = emit_get_last_id( ent_type )
+                                        cmds.append( f"rotate body {{ {wid} }} about z angle 30" )
+                                        cmds.append( f"rotate body {{ {wid} }} about y angle 90")
+                                    else:
+                                        cmds.append( f"brick x {inner_world[0]} y {inner_world[1]} z {inner_world[2]}" )
+                                        wid = emit_get_last_id( ent_type )
+                                else:
+                                    cmds.append( f"brick x {w[0]} y {w[1]} z {w[2]}" )
+                                    wid = emit_get_last_id( ent_type )
+                                cmds.append( f"subtract body {{ { ids } }} from body {{ { wid } }}" )
+                                move( wid, translation[0,0], translation[1,0], translation[2,0] )
+                                return wid
                             move( ids, translation[0,0], translation[1,0], translation[2,0] )
+                            #rotate( ids, surface.coefficients['dx'], surface.coefficients['dy'], surface.coefficients['dz'] )
                             return ids
                         if C_ == 0:
                             #print( "Z", gq_type, A_, B_, C_, K_ )
@@ -516,7 +592,25 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], cells=None, filename=No
                             r2 = math.sqrt( abs( K_/B_ ) )
                             cmds.append( f"cylinder height {h} Major Radius {r1} Minor Radius {r2}")
                             ids = emit_get_last_id( ent_type )
+                            if node.side != '-':
+                                wid = 0
+                                if inner_world:
+                                    if hex:
+                                        cmds.append( f"create prism height {inner_world[2]} sides 6 radius { inner_world[0] / 2 } " )
+                                        wid = emit_get_last_id( ent_type )
+                                        cmds.append( f"rotate body {{ {wid} }} about z angle 30" )
+                                        cmds.append( f"rotate body {{ {wid} }} about y angle 90")
+                                    else:
+                                        cmds.append( f"brick x {inner_world[0]} y {inner_world[1]} z {inner_world[2]}" )
+                                        wid = emit_get_last_id( ent_type )
+                                else:
+                                    cmds.append( f"brick x {w[0]} y {w[1]} z {w[2]}" )
+                                    wid = emit_get_last_id( ent_type )
+                                cmds.append( f"subtract body {{ { ids } }} from body {{ { wid } }}" )
+                                move( wid, translation[0,0], translation[1,0], translation[2,0] )
+                                return wid
                             move( ids, translation[0,0], translation[1,0], translation[2,0] )
+                            #rotate( ids, surface.coefficients['dx'], surface.coefficients['dy'], surface.coefficients['dz'] )
                             return ids
                     elif gq_type == ELLIPTIC_CONE : #3
                         if A_ == 0:
