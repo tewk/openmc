@@ -516,10 +516,44 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], cells=None, filename=No
                     return ids
                 elif surface._type == "quadric":
                     ( gq_type, A_, B_, C_, K_, translation, rotation_matrix ) = characterize_general_quadratic( surface )
+
+                    def rotation_to_axis_angle( mat ):
+                        x = mat[2, 1]-mat[1, 2];
+                        y = mat[0, 2]-mat[2, 0];
+                        z = mat[1, 0]-mat[0, 1];
+                        r = math.hypot( x, math.hypot( y,z ));
+                        t = mat[0,0] + mat[1,1] + mat[2,2];
+                        theta = math.atan2(r,t-1);
+
+
+                        if abs(theta) <= np.finfo(np.float64).eps:
+                            return ( np.array([ 0, 0, 0 ]), 0 )
+                        elif abs( theta - math.pi ) <= np.finfo(np.float64).eps:
+                          # theta is pi (180 degrees) or extremely close to it
+                          # find the column of mat with the largest diagonal
+                          col = 0;
+                          if mat[1,1] > mat[col,col]: col = 1
+                          if mat[2,2] > mat[col,col]: col = 2
+
+                          axis = np.array([ 0, 0, 0 ])
+
+                          axis[col] = math.sqrt( (mat[col,col]+1)/2 );
+                          denom = 2*axis[col];
+                          axis[(col+1)%3] = mat[col,(col+1)%3] / denom;
+                          axis[(col+2)%3] = mat[col,(col+2)%3] / denom;
+                          return ( axis, theta )
+                        else:
+                          axis = np.array([ x/r, y/r, z/r ])
+                          return ( axis, theta )
+
                     #print( "Quadric", characterize_general_quadratic( surface ) )
                     #print( gq_type, A_, B_, C_, K_ )
                     #print( translation )
                     #print( rotation_matrix )
+                    (r_axis, r_theta ) = rotation_to_axis_angle( rotation_matrix )
+                    #compensate for cubits insertion of a negative
+                    r_degs = - math.degrees( r_theta )
+                    print( r_axis, math.degrees( r_theta ), r_degs )
                     if gq_type == ELLIPSOID : #1
                             r1 = math.sqrt( abs( -K_/A_ ) )
                             r2 = math.sqrt( abs( -K_/B_ ) )
@@ -530,7 +564,7 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], cells=None, filename=No
                             move( ids, translation[0,0], translation[1,0], translation[2,0] )
                     elif gq_type == ELLIPTIC_CYLINDER : #7
                         if A_ == 0:
-                            #print( "X", gq_type, A_, B_, C_, K_ )
+                            print( "X", gq_type, A_, B_, C_, K_, r_axis, r_degs )
                             h = inner_world[0] if inner_world else w[0] 
                             r1 = math.sqrt( abs( K_/C_ ) )
                             r2 = math.sqrt( abs( K_/B_ ) )
@@ -552,13 +586,14 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], cells=None, filename=No
                                     cmds.append( f"brick x {w[0]} y {w[1]} z {w[2]}" )
                                     wid = emit_get_last_id( ent_type )
                                 cmds.append( f"subtract body {{ { ids } }} from body {{ { wid } }}" )
+                                cmds.append( f"Rotate body {{ {wid } }} about 0 0 0 direction {r_axis[0]} {r_axis[1]} {r_axis[2]} Angle {r_degs}")
                                 move( wid, translation[0,0], translation[1,0], translation[2,0] )
                                 return wid
-                            #rotate( ids, surface.coefficients['dx'], surface.coefficients['dy'], surface.coefficients['dz'] )
+                            cmds.append( f"Rotate body {{ {ids} }} about 0 0 0 direction {r_axis[0]} {r_axis[1]} {r_axis[2]} Angle {r_degs}")
                             move( ids, translation[0,0], translation[1,0], translation[2,0] )
                             return ids
                         if B_ == 0:
-                            #print( "Y", gq_type, A_, B_, C_, K_ )
+                            print( "Y", gq_type, A_, B_, C_, K_ )
                             h = inner_world[1] if inner_world else w[1] 
                             r1 = math.sqrt( abs( K_/A_ ) )
                             r2 = math.sqrt( abs( K_/C_ ) )
@@ -580,13 +615,14 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], cells=None, filename=No
                                     cmds.append( f"brick x {w[0]} y {w[1]} z {w[2]}" )
                                     wid = emit_get_last_id( ent_type )
                                 cmds.append( f"subtract body {{ { ids } }} from body {{ { wid } }}" )
+                                cmds.append( f"Rotate body {{ {wid } }} about 0 0 0 direction {r_axis[0]} {r_axis[1]} {r_axis[2]} Angle {r_degs}")
                                 move( wid, translation[0,0], translation[1,0], translation[2,0] )
                                 return wid
+                            cmds.append( f"Rotate body {{ {ids} }} about 0 0 0 direction {r_axis[0]} {r_axis[1]} {r_axis[2]} Angle {r_degs}")
                             move( ids, translation[0,0], translation[1,0], translation[2,0] )
-                            #rotate( ids, surface.coefficients['dx'], surface.coefficients['dy'], surface.coefficients['dz'] )
                             return ids
                         if C_ == 0:
-                            #print( "Z", gq_type, A_, B_, C_, K_ )
+                            print( "Z", gq_type, A_, B_, C_, K_ )
                             h = inner_world[2] if inner_world else w[2] 
                             r1 = math.sqrt( abs( K_/A_ ) )
                             r2 = math.sqrt( abs( K_/B_ ) )
@@ -607,10 +643,11 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], cells=None, filename=No
                                     cmds.append( f"brick x {w[0]} y {w[1]} z {w[2]}" )
                                     wid = emit_get_last_id( ent_type )
                                 cmds.append( f"subtract body {{ { ids } }} from body {{ { wid } }}" )
+                                cmds.append( f"Rotate body {{ {wid } }} about 0 0 0 direction {r_axis[0]} {r_axis[1]} {r_axis[2]} Angle {r_degs}")
                                 move( wid, translation[0,0], translation[1,0], translation[2,0] )
                                 return wid
+                            cmds.append( f"Rotate body {{ {ids} }} about 0 0 0 direction {r_axis[0]} {r_axis[1]} {r_axis[2]} Angle {r_degs}")
                             move( ids, translation[0,0], translation[1,0], translation[2,0] )
-                            #rotate( ids, surface.coefficients['dx'], surface.coefficients['dy'], surface.coefficients['dz'] )
                             return ids
                     elif gq_type == ELLIPTIC_CONE : #3
                         if A_ == 0:
@@ -627,7 +664,7 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], cells=None, filename=No
                             mirror = emit_get_last_id( ent_type )
                             cmds.append( f"rotate body {{ { mirror } }} about 0 0 0 angle 180")
                             cmds.append( f"unit body {{ { ids } }} {{ { mirror } }}")
-                            #rotate( ids, surface.coefficients['dx'], surface.coefficients['dy'], surface.coefficients['dz'] )
+                            cmds.append( f"Rotate body {{ {ids} }} about 0 0 0 direction {r_axis[0]} {r_axis[1]} {r_axis[2]} Angle {r_degs}")
                             move( ids, translation[0,0], translation[1,0], translation[2,0] )
                             return ids
                         if B_ == 0:
@@ -644,7 +681,7 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], cells=None, filename=No
                             mirror = emit_get_last_id( ent_type )
                             cmds.append( f"rotate body {{ { mirror } }} about 0 0 0 angle 180")
                             cmds.append( f"unit body {{ { ids } }} {{ { mirror } }}")
-                            #rotate( ids, surface.coefficients['dx'], surface.coefficients['dy'], surface.coefficients['dz'] )
+                            cmds.append( f"Rotate body {{ {ids} }} about 0 0 0 direction {r_axis[0]} {r_axis[1]} {r_axis[2]} Angle {r_degs}")
                             move( ids, translation[0,0], translation[1,0], translation[2,0] )
                             return ids
                         if C_ == 0:
@@ -660,7 +697,7 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], cells=None, filename=No
                             mirror = emit_get_last_id( ent_type )
                             cmds.append( f"rotate body {{ { mirror } }} about 0 0 0 angle 180")
                             cmds.append( f"unit body {{ { ids } }} {{ { mirror } }}")
-                            #rotate( ids, surface.coefficients['dx'], surface.coefficients['dy'], surface.coefficients['dz'] )
+                            cmds.append( f"Rotate body {{ {ids} }} about 0 0 0 direction {r_axis[0]} {r_axis[1]} {r_axis[2]} Angle {r_degs}")
                             move( ids, translation[0,0], translation[1,0], translation[2,0] )
                             return ids
                     else:
