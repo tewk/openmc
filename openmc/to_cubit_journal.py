@@ -284,7 +284,7 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], cells=None, filename=No
                         cmds.append( f"# dir {node.side}" )
                         cmds.append( f"# c_  {ca} {cb} {cc} {cd}" )
                         #cmds.append( f"# n  {n[0]} {n[1]} {n[2]}" )
-                        n = n/np.linalg.norm(n)
+                        n = n/(np.linalg.norm(n)**2)
                         ns = cd * n
                         #cmds.append( f"# n  {n[0]} {n[1]} {n[2]}" )
                         zn = np.array([ 0, 0, 1 ])
@@ -292,7 +292,7 @@ def to_cubit_journal(geom, seen=set(), world=[60,60,60], cells=None, filename=No
                         dot = np.dot(n, zn )
                         cmds.append( f"# n3 {n3[0]} {n3[1]} {n3[2]}" )
                         #cmds.append( f"# dot {dot}" )
-                        degs = math.degrees( math.acos( np.dot( n, zn ) ) )
+                        #degs = math.degrees( math.acos( np.dot( n, zn ) ) )
                         y = np.linalg.norm( n3 )
                         x = dot
                         #cubit 'rotate body' introduces a negative so we compensate here with a negative
